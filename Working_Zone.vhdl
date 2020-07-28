@@ -11,6 +11,7 @@
 ----------------------------------------------------------------------------------
 
 --TODO:
+-- E' necessario avere un reset asincrono o no?
 -- Verifica se i segnali presenti nella sensitivity_list di lambda sono tutti necessario
 -- Stima se è necessario passare ad un sistema con un solo process 
 
@@ -72,23 +73,26 @@ architecture behavioral of project_reti_logiche is
 	--signal got_address , got_address_next : boolean := false 
 	
 	begin 
-		state_change : process ( i_clk, i_rst ) 
+	
+		state_change : process ( i_clk ) 
 		begin 
 		
-			if (rising_edge(i_rst)) then
-				current_wz      <= "00000000";
-			
-				address_request <= "0000000000000000"; 
-				read_address    <= "00000000";
-				coded_address   <= "00000000";
+			if (rising_edge(i_clk)) then
 				
-				does_belong     <='0';
-				wz_num          <= "000";
-				wz_off          <= "0000";	
-				
-				current_state   <= idle;	
+				if (rising_edge(i_rst)) then
+					current_wz      <= "00000000";
 			
-			elsif (rising_edge(i_clk)) then
+					address_request <= "0000000000000000"; 
+					read_address    <= "00000000";
+					coded_address   <= "00000000";
+				
+					does_belong     <='0';
+					wz_num          <= "000";
+					wz_off          <= "0000";	
+				
+					current_state   <= idle;	
+			    end if;
+				
 				--scorro i miei output al valore successivo
 				o_done    <= o_done_next;
 				o_en      <= o_en_next;
