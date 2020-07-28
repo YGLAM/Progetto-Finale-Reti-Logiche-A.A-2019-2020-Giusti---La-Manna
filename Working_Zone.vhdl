@@ -74,64 +74,70 @@ architecture behavioral of project_reti_logiche is
 	
 	begin 
 	
-		state_change : process ( i_clk ) 
-		begin 
-		
-			if (rising_edge(i_clk)) then
-				
-				if (rising_edge(i_rst)) then
-					current_wz      <= "00000000";
+		state_change : process ( i_clk, i_rst) 
+            begin 
+                if rising_edge(i_rst) then
+				    --setto i segnali al valore successivo 
+                    next_wz              <= "00000000";
+                    address_request_next <= "0000000000000000"; 
+					
+                    o_done_next          <= '0';
+				    o_en_next            <= '0';
+				    o_we_next            <= '0';
+				    o_data_next          <= "00000000";
+				    o_address_next       <= "0000000000000000";
 			
-					address_request <= "0000000000000000"; 
-					read_address    <= "00000000";
-					coded_address   <= "00000000";
+				    read_address_next    <= "00000000";
+				    does_belong_next     <= '0' ;
+				    wz_num_next          <= "000";
+				    wz_off_next          <= "0000";	
+				    
+					coded_address_next   <= "00000000";
 				
-					does_belong     <='0';
-					wz_num          <= "000";
-					wz_off          <= "0000";	
-				
-					current_state   <= idle;	
+					next_state   <= idle;	
 			    end if;
-				
-				--scorro i miei output al valore successivo
-				o_done    <= o_done_next;
-				o_en      <= o_en_next;
-				o_we      <= o_we_next;
-				o_data    <= o_data_next;
-				o_address <= o_address_next;--not sure
-				--setto i segnali al valore successivo 
-				current_wz      <= next_wz;
-				address_request <= address_request_next;
-				read_address    <= read_address_next;
-				coded_address   <= coded_address_next;
+                if rising_edge(i_clk) then
+				    --scorro i miei output al valore successivo
+				    current_wz      <= next_wz;
+				    address_request <= address_request_next;
+				   
+				    o_done    <= o_done_next;
+				    o_en      <= o_en_next;
+				    o_we      <= o_we_next;
+				    o_data    <= o_data_next;
+				    o_address <= o_address_next;--not sure
+				    
+				    read_address    <= read_address_next;
+				    does_belong     <= does_belong_next;
+				    wz_num          <= wz_num_next;
+				    wz_off          <= wz_off_next;
+				    
+					coded_address   <= coded_address_next;
 			
-				does_belong     <= does_belong_next;
-				wz_num          <= wz_num_next;
-				wz_off          <= wz_off_next;
-				
-				current_state <= next_state;
-				
-			end if;
+				    current_state <= next_state;
+			    end if;     
 		end process;
+		
 		--potrebbe essere necessario cambiare la sensitivity list
 		lambda : process ( current_state, i_start, i_data,current_wz,address_request,read_address,coded_address,
 						   does_belong, wz_num , wz_off ) 
 		begin 
-			--inizializzo i valori dei registri next per l'output
+			--inizializzo i valori dei registri next per l'output, se non vengono modificati permangono nel loro stato 
+			next_wz              <= current_wz; 
+			address_request_next <= address_request;
+			
 			o_done_next    <= '0';
 			o_en_next      <= '0';
 			o_we_next      <= '0';
 			o_data_next    <= "00000000";
 			o_address_next <= "0000000000000000";
-			--inizializzo i valori dei segnali successivi 
-			next_wz              <= current_wz; 
-			address_request_next <= address_request;
-			coded_address_next   <= coded_address_next;
 			
-			--number_wz_next       <= number_wz; 
+			read_address_next    <= read_address;
 			does_belong_next     <= does_belong;			
 			wz_num_next          <= wz_num;
 			wz_off_next          <= wz_off;
+			
+			coded_address_next   <= coded_address;
 			
 			next_state           <= current_state;
 			
@@ -140,12 +146,13 @@ architecture behavioral of project_reti_logiche is
 				when idle =>
 					if i_start = '1' then 
 						next_state <= fetch_address;
-					else 
+					else -- dovrebbe essere inutile poichè a 142 dichiaro che lo stato permane
 						next_state <= idle;
 					end if;
 				
 				--stato in cui richiedo alla RAM l'address da codificare presente in RAM[8] 
 				when fetch_address => 
+				
 					o_en_next <= '1';
 					o_we_next <= '0';
 					
@@ -153,12 +160,12 @@ architecture behavioral of project_reti_logiche is
 					next_state     <= get_address; 
 				--stato in cui ottengo l'address da codificare da RAM[8] e lo salvo in memoria
 				when get_address =>
+					
 					read_address_next <= i_data;
 					next_state <= wz_loop; 
 				--stato in cui verifico se ho controllato tutte le working zone, continuo fino a quando non le ho viste tutte o l'address appartiene ad una
 				when wz_loop => 
 					--N.B La condizione di arresto potrebbe essere su number_wz 8 poichè le WZ vanno da 0 a 7
-				
 					--Il ciclo continua fino a quando non ho letto tutte le working zone o se l'address appartiene ad una working zone
 					if (not (unsigned(wz_num) <= 7) or not (does_belong ='1')) then
 						--mi prendo il valore RAM[number_wz] 
@@ -224,13 +231,14 @@ architecture behavioral of project_reti_logiche is
 				--stato di completamento in cui attendo un nuovo segnale di start
 				when done => 
 					if ( i_start = '0') then 
+						o_done_next          <= '0';	
+						
 						address_request_next <= "0000000000000000";
 						read_address_next    <= "00000000";
 						coded_address_next   <= "00000000";
 						next_wz              <= "00000000";
 						wz_num_next          <= "000";
 						wz_off_next          <= "0000";
-						o_done_next          <= '0';					
 						
 						next_state <= idle;
 					end if;
