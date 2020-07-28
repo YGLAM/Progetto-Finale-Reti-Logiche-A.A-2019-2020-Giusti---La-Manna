@@ -11,7 +11,7 @@
 ----------------------------------------------------------------------------------
 
 --TODO:
--- E' necessario avere un reset asincrono o no?
+-- Sistema il multi net driven pin, probabilmente non è permesso mettere più volte lo stesso assegnamento in process diversi
 -- Verifica se i segnali presenti nella sensitivity_list di lambda sono tutti necessario
 -- Stima se è necessario passare ad un sistema con un solo process 
 
@@ -77,35 +77,31 @@ architecture behavioral of project_reti_logiche is
 		state_change : process ( i_clk, i_rst) 
             begin 
                 if rising_edge(i_rst) then
-				    --setto i segnali al valore successivo 
-                    next_wz              <= "00000000";
-                    address_request_next <= "0000000000000000"; 
-					
-                    o_done_next          <= '0';
-				    o_en_next            <= '0';
-				    o_we_next            <= '0';
-				    o_data_next          <= "00000000";
-				    o_address_next       <= "0000000000000000";
+				    --setto i segnali al valore successivo, non i next perchè danno errori di multi driven pin
+					current_state        <= idle;	
+                    
+					current_wz			 <= "00000000";
+                    address_request      <= "0000000000000000"; 
 			
-				    read_address_next    <= "00000000";
-				    does_belong_next     <= '0' ;
-				    wz_num_next          <= "000";
-				    wz_off_next          <= "0000";	
+				    read_address         <= "00000000";
+				    does_belong          <= '0' ;
+				    wz_num               <= "000";
+				    wz_off               <= "0000";	
 				    
-					coded_address_next   <= "00000000";
-				
-					next_state   <= idle;	
-			    end if;
+					coded_address        <= "00000000";
+				end if;
                 if rising_edge(i_clk) then
 				    --scorro i miei output al valore successivo
-				    current_wz      <= next_wz;
+				    current_state   <= next_state;
+				    
+					current_wz      <= next_wz;
 				    address_request <= address_request_next;
 				   
-				    o_done    <= o_done_next;
-				    o_en      <= o_en_next;
-				    o_we      <= o_we_next;
-				    o_data    <= o_data_next;
-				    o_address <= o_address_next;--not sure
+				    o_done          <= o_done_next;
+				    o_en            <= o_en_next;
+				    o_we            <= o_we_next;
+				    o_data          <= o_data_next;
+				    o_address       <= o_address_next;--not sure
 				    
 				    read_address    <= read_address_next;
 				    does_belong     <= does_belong_next;
@@ -114,15 +110,23 @@ architecture behavioral of project_reti_logiche is
 				    
 					coded_address   <= coded_address_next;
 			
-				    current_state <= next_state;
 			    end if;     
 		end process;
 		
 		--potrebbe essere necessario cambiare la sensitivity list
-		lambda : process ( current_state, i_start, i_data,current_wz,address_request,read_address,coded_address,
-						   does_belong, wz_num , wz_off ) 
+		lambda : process ( i_start,
+						   i_data,
+						   current_state,
+						   current_wz,
+						   address_request,
+						   read_address,
+						   coded_address,
+						   does_belong,
+						   wz_num,
+						   wz_off ) 
 		begin 
 			--inizializzo i valori dei registri next per l'output, se non vengono modificati permangono nel loro stato 
+			next_state           <= current_state;
 			next_wz              <= current_wz; 
 			address_request_next <= address_request;
 			
@@ -139,7 +143,6 @@ architecture behavioral of project_reti_logiche is
 			
 			coded_address_next   <= coded_address;
 			
-			next_state           <= current_state;
 			
 			case current_state is
 				--stato di attesa per il segnale di start
@@ -200,7 +203,7 @@ architecture behavioral of project_reti_logiche is
 					else 
 						--decido di passare al successivo solo se non sono arrivato alla fine 
 						wz_num_next      <= std_logic_vector( unsigned(wz_num) +1);
-						next_state       <= check_wz;
+						next_state       <= wz_loop;
 					end if;
 				-- stato in cui calcolo l'address in base alla sua appartenenza o meno ad una working zone	
 				when calc_address =>
