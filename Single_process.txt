@@ -1,0 +1,181 @@
+----------------------------------------------------------------------------------
+-- Studente: Giuseppe La Manna Leonardo Giusti
+-- Codice Matricola : 10608466
+-- Design Name: 
+-- Module Name: project_reti_logiche - Behavioral
+--
+-- Description: A module that encodes addresses for a RAM using Working Zones
+-- Revision 0.02 - Notepad++ version
+--
+-- Additional Comments:
+----------------------------------------------------------------------------------
+
+--TODO:
+-- Sistema il multi net driven pin, probabilmente non è permesso mettere più volte lo stesso assegnamento in process diversi
+-- Verifica se i segnali presenti nella sensitivity_list di lambda sono tutti necessario
+-- Stima se è necessario passare ad un sistema con un solo process 
+
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.std_logic_unsigned.all;
+use IEEE.NUMERIC_STD.ALL;
+package constants is 
+	constant ram_in_address : std_logic_vector := "0000000000001000";
+	constant ram_out_address : std_logic_vector := "0000000000001001";
+end constants;
+
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.std_logic_unsigned.all;
+use IEEE.NUMERIC_STD.ALL;
+use work.constants.all;
+
+entity project_reti_logiche is
+	port(
+		i_clk : in std_logic;
+		i_start : in std_logic; 
+		i_rst : in std_logic;
+		i_data : in std_logic_vector ( 7 downto 0 );
+		o_address : out std_logic_vector ( 15 downto 0 );
+		o_done : out std_logic ;
+		o_en : out std_logic ; 
+		o_we : out std_logic ; 
+		o_data : out std_logic_vector ( 7 downto 0 )
+);
+end entity;
+
+architecture behavioral of project_reti_logiche is 
+	--enum degli stati della FSM
+	type state_type is( idle , fetch_address, get_address ,wz_loop,get_wz,check_wz,calc_address,output_address,done ,restart);
+	--type loaded_wz is array( 7 downto 0 ) of std_logic_vector ( 7 downto 0) ;
+	
+	signal current_state, next_state : state_type;
+	--segnale contenente l'address base della working zone corrispondente
+	signal current_wz,    next_wz    :std_logic_vector ( 7 downto 0 ) ;--: loaded_wz; 
+	--segnale contenente l'address corrente che sto richiedendo dalla RAM 
+	signal address_request,address_request_next :std_logic_vector ( 15 downto 0) := "0000000000000000"; 
+	--segnali per il successivo valore degli output
+	signal o_done_next, o_en_next, o_we_next    : std_logic := '0';
+	signal o_data_next : std_logic_vector(7 downto 0)     := "00000000";
+	signal o_address_next : std_logic_vector(15 downto 0) := "0000000000000000";
+	
+	--su di lui salvo temporaneamente il valore dell'indirizzo richiesto da RAM[8]
+	signal read_address, read_address_next : std_logic_vector( 7 downto 0) := "00000000";
+	--segnale che specifica se il read_address appartiene  o meno alla working zone
+	signal does_belong , does_belong_next : std_logic := '0'; 
+	--segnale contenente il numero della working zone cui si riferisce l'address ricevuto da RAM[8]
+	signal wz_num , wz_num_next : std_logic_vector ( 2 downto 0 ) := "000";
+	--segnale contenente l'offset dell'address di RAM[8] rispetto alla base della working zone 
+	signal wz_off , wz_off_next : std_logic_vector ( 3 downto 0 ) := "0000";
+	--segnale finale codificato che andrò a scrivere su RAM[9]
+	signal coded_address , coded_address_next : std_logic_vector ( 7 downto 0 ) := "00000000";
+	signal need_restart : boolean := false;
+	signal need_rst : boolean := false;
+	
+	begin 
+	    single_process : process( i_rst, i_clk, i_start)
+	    --variable tmp_upper_bound : std_logic_vector ( 7 downto 0);
+	    begin
+	       o_en <='0';
+	       o_we <='0';
+	       --o_data<="00000000";
+	       
+	           if rising_edge(i_rst) then
+	               need_rst <= true;
+	           end if;  
+	            
+	           if falling_edge(i_start) then
+	              need_restart <= true;
+	           end if;
+	                
+		       if rising_edge( i_clk) then
+		          if ( need_rst = true) then 
+		                 next_state<= idle;
+		                 need_rst <= false;
+		                 o_done <= '0';
+		                 current_wz <= "00000000";
+		                 address_request <= "0000000000000000";
+		                 read_address <= "00000000";
+		                 does_belong <= '0';
+		                 wz_num <= "000";
+		                 wz_off <= "0000";
+		                 coded_address <="00000000";
+		          end if;
+		              current_state <= next_state;
+		                   
+		              case current_state is 
+		                  when idle =>
+		                      if i_start='1' then 
+		                          current_wz <= "00000000";
+		                          address_request <= "0000000000000000";
+		                          read_address <= "00000000";
+		                          does_belong <= '0';
+		                          wz_num <= "000";
+		                          wz_off <= "0000";
+		                          coded_address <="00000000";
+		                          next_state <= fetch_address;		                          
+		                      end if;   
+		                  when fetch_address =>
+		                      o_en <= '1';
+		                      o_we <= '0';
+		                      o_address <= ram_in_address;
+		                      
+		                      next_state <= get_address;
+                          when get_address =>
+		                      read_address <= i_data;
+		                      next_state <= wz_loop;
+		                     
+		                  when wz_loop =>
+		                      if ( unsigned(wz_num)<= 7) then
+		                          o_en <='1';
+		                          o_we <='0';
+		                          o_address <= std_logic_vector(resize(unsigned(wz_num), o_address'length));
+		                          current_state <= get_wz;
+		                      end if;
+                          when get_wz=>
+		                      current_wz <= i_data;
+		                      next_state <= check_wz;
+		                  when check_wz =>
+		                      --read_address = RAM[8]
+		                      --current_wz 
+		                      --tmp_upper_bound := std_logic_vector( unsigned(current_wz)+ 4 );
+		                      if ( unsigned(read_address) >= unsigned(current_wz) and unsigned(read_address) <= (unsigned(current_wz)+ 4))then
+                                      does_belong <= '1';
+                                      current_state <= calc_address;
+                              elsif ( unsigned(wz_num)<7 ) then
+                                      wz_num <= std_logic_vector (unsigned(wz_num)+1);
+                                      current_state <= wz_loop;
+                              else 
+                                      next_state <= calc_address;                
+		                      end if; 
+		                  when calc_address=>
+		                      if ( does_belong = '1') then 
+		                          wz_off <= ( others => '0');
+		                          wz_off(to_integer(unsigned(read_address)- unsigned(current_wz)) )<= '1';
+		                          
+		                          coded_address <= '1' & wz_num & wz_off;
+		                      elsif ( does_belong='0') then
+		                         -- coded_address(7) <= '0';
+		                          --coded_address(6 downto 0) <= read_address(6 downto 0);    
+		                          coded_address <= read_address;
+		                      end if;
+		                      next_state <= output_address;
+		                  when output_address=>
+		                      o_en <= '1';
+		                      o_we <= '1';
+		                      o_address <= ram_out_address;
+		                      o_data <= coded_address;
+		                      next_state <= done;
+		                  when done=>
+		                      o_done <= '1';
+		                      next_state <= restart;
+		                  when restart=>
+		                      if ( need_restart = true) then
+		                          o_done<='0';
+		                          need_restart <= false;
+		                          next_state<=idle;
+		                      end if;    
+		              end case;
+		     end if;    
+		end process; 
+end behavioral;
