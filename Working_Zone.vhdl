@@ -11,10 +11,7 @@
 ----------------------------------------------------------------------------------
 
 --TODO:
--- Sistema il multi net driven pin, probabilmente non è permesso mettere più volte lo stesso assegnamento in process diversi
 -- Verifica se i segnali presenti nella sensitivity_list di lambda sono tutti necessario
--- Stima se è necessario passare ad un sistema con un solo process 
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.std_logic_unsigned.all;
@@ -52,8 +49,6 @@ architecture behavioral of project_reti_logiche is
 	signal current_state, next_state : state_type;
 	--segnale contenente l'address base della working zone corrispondente
 	signal current_wz,    next_wz    :std_logic_vector ( 7 downto 0 ) ;--: loaded_wz; 
-	--segnale contenente l'address corrente che sto richiedendo dalla RAM 
-	--signal address_request,address_request_next :std_logic_vector ( 15 downto 0) := "0000000000000000"; 
 	--segnali per il successivo valore degli output
 	signal o_done_next, o_en_next, o_we_next    : std_logic := '0';
 	signal o_data_next : std_logic_vector(7 downto 0)     := "00000000";
@@ -81,7 +76,8 @@ architecture behavioral of project_reti_logiche is
 	      if ( current_state = reset) then
 	           need_rst <= false;    
 	       end if;
-	    end process;          
+	    end process;   
+		
 		state_change : process ( i_clk) 
             begin   
                 if rising_edge(i_clk) then
@@ -131,9 +127,7 @@ architecture behavioral of project_reti_logiche is
 			
 			coded_address_next   <= coded_address;
 			
-			--if rising_edge(i_rst) then
-			--     next_state <= reset; 
-			--end if;
+			
 			case current_state is
 				--stato di attesa per il segnale di start
 				when idle =>
