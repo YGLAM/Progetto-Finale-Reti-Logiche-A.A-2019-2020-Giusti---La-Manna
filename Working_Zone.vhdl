@@ -11,7 +11,10 @@
 ----------------------------------------------------------------------------------
 
 --TODO:
+-- Sistema il multi net driven pin, probabilmente non è permesso mettere più volte lo stesso assegnamento in process diversi
 -- Verifica se i segnali presenti nella sensitivity_list di lambda sono tutti necessario
+-- Stima se è necessario passare ad un sistema con un solo process 
+
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.std_logic_unsigned.all;
@@ -49,6 +52,8 @@ architecture behavioral of project_reti_logiche is
 	signal current_state, next_state : state_type;
 	--segnale contenente l'address base della working zone corrispondente
 	signal current_wz,    next_wz    :std_logic_vector ( 7 downto 0 ) ;--: loaded_wz; 
+	--segnale contenente l'address corrente che sto richiedendo dalla RAM 
+	--signal address_request,address_request_next :std_logic_vector ( 15 downto 0) := "0000000000000000"; 
 	--segnali per il successivo valore degli output
 	signal o_done_next, o_en_next, o_we_next    : std_logic := '0';
 	signal o_data_next : std_logic_vector(7 downto 0)     := "00000000";
@@ -76,8 +81,7 @@ architecture behavioral of project_reti_logiche is
 	      if ( current_state = reset) then
 	           need_rst <= false;    
 	       end if;
-	    end process;   
-		
+	    end process;          
 		state_change : process ( i_clk) 
             begin   
                 if rising_edge(i_clk) then
@@ -127,7 +131,9 @@ architecture behavioral of project_reti_logiche is
 			
 			coded_address_next   <= coded_address;
 			
-			
+			--if rising_edge(i_rst) then
+			--     next_state <= reset; 
+			--end if;
 			case current_state is
 				--stato di attesa per il segnale di start
 				when idle =>
@@ -156,7 +162,7 @@ architecture behavioral of project_reti_logiche is
 						--mi prendo il valore RAM[number_wz] 
 						o_en_next      <= '1';
 						o_we_next      <= '0';
-						o_address_next <= std_logic_vector (to_unsigned(wz_num_next,o_address_next'length));
+						o_address_next <= std_logic_vector (to_unsigned(wz_num,o_address_next'length));--used wz_num_next
 						--passo allo slot successivo 
 						next_state <= wait_wz;
 				when wait_wz =>
@@ -209,13 +215,13 @@ architecture behavioral of project_reti_logiche is
 						--calcolo il numero della wz e il suo offset
 						wz_off      := (others => '0');
 						wz_off(to_integer(unsigned(read_address) - unsigned(current_wz))) := '1';
-						wz_num_vector := to_unsigned(wz_num_next, wz_num_vector'length);
+						wz_num_vector := to_unsigned(wz_num, wz_num_vector'length);-- used wz_num_next
 						coded_address_next <= '1' & std_logic_vector(wz_num_vector) & std_logic_vector(wz_off);
 					
 					elsif ( does_belong = '0') then
-						coded_address_next <= read_address_next;
+						coded_address_next <= read_address;--_next;
 					end if;
-				o_data_next <= read_address_next;
+				    o_data_next <= read_address;--_next;
 					next_state <= output_address;
 				--stato in cui scrivo in memoria il valore finale dell'address in memoria
 				when output_address =>
@@ -228,23 +234,26 @@ architecture behavioral of project_reti_logiche is
 					next_state <= wait_done;
 				--stato di completamento in cui attendo un nuovo segnale di start
 				when wait_done =>
-				    o_address_next(7 downto 0) <= i_data;
-					o_data_next <= coded_address_next;
+				    --o_address_next(7 downto 0) <= i_data;
+					--o_data_next <= coded_address_next;
 					o_done_next <='1';
 				    next_state <= done;
 				when done => 
-				o_data_next <= read_address_next;
-
+				    --o_data_next <= read_address_next;
+                        o_done_next          <= '1';
 					if ( i_start = '0') then 
 						o_done_next          <= '0';	
 						
-						read_address_next    <= "00000000";
-						coded_address_next   <= "00000000";
+						--next_state           <= reset;
 						next_wz              <= "00000000";
+						
+						read_address_next    <= "00000000";
+						does_belong_next          <= '0';
 						wz_num_next          <= 0;
 						wz_off               := "0000";
 						
-						does_belong_next          <= '0';
+						
+						coded_address_next   <= "00000000";
 						next_state           <= idle;
 					end if;
 				when reset =>
